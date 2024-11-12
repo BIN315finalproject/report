@@ -1,0 +1,116 @@
+---
+title: "Transcriptome Analysis in Colorectal Cancer Diagnostics"
+output: html_document
+author: "Joudy Raba Bakri Radwan Mouhaffel, Lea Skaar-Henriksen, Haldor Haugen, Gege Liu"
+date: "2024-11-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Abstract
+
+## 1. Introduction
+
+## 2. Methods
+
+### Dataset
+In this study, we utilized the TCGA-COAD dataset, which is publicly available through the Cancer Genome Atlas (TCGA) research network at https://portal.gdc.cancer.gov/, and contains multi-omics data. We specifically focused on RNA-Seq data, accessed via the TCGAbiolinks R package[1]. This dataset includes a key attribute, sample_type, which allows us to distinguish between primary tumor samples and solid tissue normal samples, making it well-suited for classification analysis. The primary objective of this study was to explore how gene expression changes associated with colorectal cancer (CRC) can be identified and used to predict CRC, while applying key concepts in differential analysis, supervised learning methods, and enrichment analysis as taught in the Functional Genomics BIN315 course.
+
+### 2.1 Data Exploration and Preprosessing
+#### 2.1.1 Distribution 
+the distribution of the target value
+
+#### 2.1.2 Normalization 
+VST-normalization？
+
+### 2.2 Principal Component Analysis / Clustering 
+For visulazation or dimensionality reduction ? From the PCA results, we can make a simple judgment: Is it possible to classify these samples using machine learning?
+
+PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, namely principal components. This transformation can improve computational efficiency while retaining most of the original information, while facilitating visualization exploration and feature selection.
+
+### 2.3 Differential Expression Analysis 
+Calculate logFC and FDR to identify differentially expressed genes between tumor and normal samples and select important genes?
+
+
+### 2.4 Supervised Methods
+#### 2.4.1 Class Balance and Feature selection
+
+
+#### 2.4.2 Random forest(RF)
+Random Forest is an ensemble method based on decision trees that operates by creating multiple decision trees during training. Each tree is trained on a random subset of the data. Additionally, when splitting each node, a random subset of features is considered rather than all features. The final output is determined by aggregating the predictions from these multiple trees, typically using majority voting.
+
+#### 2.4.3 K-nearest neighbour(KNN)
+
+#### 2.4.4 artificial neural networks(ANN)
+
+### 2.5 Evaluation
+
+### 2.6 GO enrichment/ Gene set enrichment/ Pathway Analysis
+
+
+## 3. Results
+
+### 3.1 Load the dataset from the original database or referenced papers? we can discuss this later.
+The following code downloads the dataset from an online TCGA database.
+```{r library, echo=FALSE, results='hide'}
+suppressMessages({
+if (!requireNamespace("BiocManager", quietly = TRUE)) 
+  install.packages("BiocManager")
+  BiocManager::install("TCGAbiolinks")
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+# View all projects
+# View(TCGAbiolinks:::getGDCprojects())
+
+library(tidyverse)
+library(randomForest)
+library(matrixStats)
+})
+```
+
+```{r load data from TCGA}
+# Download RNA-Seq data for selected projects
+sink(tempfile())
+suppressMessages({
+query <- GDCquery(
+  project = "TCGA-COAD",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "STAR - Counts"
+)
+GDCdownload(query, method = "api", files.per.chunk = 10)
+data <- GDCprepare(query)
+})
+sink()
+
+# Select the tumor samples and normal samples
+## table(colData(data)$sample_type)
+filtered_samples <- colData(data)$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
+data_filtered <- assays(data)$unstranded[, filtered_samples]
+data.counts <- data.frame(t(data_filtered))
+dim(data.counts) # 60661 genes 522 samples
+sample_types_filtered <- colData(data)$sample_type[filtered_samples]
+data.counts$Sample_Type <- sample_types_filtered
+```
+
+```{r preprocessing}
+
+```
+
+The following code reads the dataset from the supplementary file S1 provided by the reference paper.
+```{r load data from paper}
+data_from_paper <- read.csv("CRC_paper_dataset.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+dim(data_from_paper) # 23182 genes 696 samples
+```
+
+## 4. Discussion
+
+## References
+1. Colaprico, A. et al. TCGAbiolinks: an R/Bioconductor package for integrative analysis of TCGA data. Nucleic Acids Res. 44(8), e71 (2016).
+
+2. Maurya, N.S., Kushwaha, S., Chawade, A. et al. Transcriptome profiling by combined machine learning and statistical R analysis identifies TMEM236 as a potential novel diagnostic biomarker for colorectal cancer. Sci Rep 11, 14304 (2021).
+
+
+
