@@ -1,7 +1,7 @@
 ---
 title: "Transcriptome Analysis in Colorectal Cancer Diagnostics"
 output: html_document
-author: "Joudy Raba Bakri Radwan Mouhaffel, Lea Skaar-Henriksen, Haldor Haugen, Gege Liu"
+author: "Group 2: Joudy Raba Bakri Radwan Mouhaffel, Lea Skaar-Henriksen, Haldor Haugen, Gege Liu"
 date: "2024-11-08"
 ---
 
@@ -19,41 +19,55 @@ knitr::opts_chunk$set(echo = TRUE)
 In this study, we utilized the TCGA-COAD dataset, which is publicly available through the Cancer Genome Atlas (TCGA) research network at https://portal.gdc.cancer.gov/, and contains multi-omics data. We specifically focused on RNA-Seq data, accessed via the TCGAbiolinks R package[1]. This dataset includes a key attribute, sample_type, which allows us to distinguish between primary tumor samples and solid tissue normal samples, making it well-suited for classification analysis. The primary objective of this study was to explore how gene expression changes associated with colorectal cancer (CRC) can be identified and used to predict CRC, while applying key concepts in differential analysis, supervised learning methods, and enrichment analysis as taught in the Functional Genomics BIN315 course.
 
 ### 2.1 Data Exploration and Preprosessing
-#### 2.1.1 Distribution 
-the distribution of the target value
+#### 2.1.1 Exploration
+Plan:
+  Load and visualize basic data characteristics, such as the number of samples, genes, and overall data distribution.
+Generate basic statistics and visualizations (e.g., distribution plots, correlation matrices) to evaluate data quality initially.
 
-#### 2.1.2 Normalization 
-VST-normalization？
+#### 2.1.2 Filtering
+Plan:
+  Set filtering thresholds (e.g., low expression threshold) to remove genes with low or no expression.
+
+#### 2.1.3 Normalization 
+Plan:
+  Normalize data using Variance Stabilizing Transformation (VST) to reduce the impact of technical variation.
 
 ### 2.2 Principal Component Analysis / Clustering 
-For visulazation or dimensionality reduction ? From the PCA results, we can make a simple judgment: Is it possible to classify these samples using machine learning?
+Objective: Use PCA to assess whether the data can be classified effectively
 
-PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, namely principal components. This transformation can improve computational efficiency while retaining most of the original information, while facilitating visualization exploration and feature selection.
+Principle: 
+  PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, namely principal components. This transformation can improve computational efficiency while retaining most of the original information, while facilitating visualization exploration and feature selection.
+
+Plan:
+  1. Perform PCA and plot the principal components to observe the distribution of tumor and normal samples.
+  2. Conduct clustering analysis (e.g., K-means or hierarchical clustering) to further assess the patterns.
+  3. Discuss the insights gained from PCA/clustering results and evaluate the feasibility of classification with machine learning.
 
 ### 2.3 Differential Expression Analysis 
-Calculate logFC and FDR to identify differentially expressed genes between tumor and normal samples and select important genes?
+Objective: Identify genes with significant differential expression between tumor and normal samples.
 
+Plan:
+  Calculate log Fold Change (logFC) and False Discovery Rate (FDR) to identify differentially expressed genes.
 
 ### 2.4 Supervised Methods
+Objective: Use supervised learning algorithms to classify samples as tumor or normal based on gene expression data.
+
 #### 2.4.1 Class Balance and Feature selection
-
-
 #### 2.4.2 Random forest(RF)
-Random Forest is an ensemble method based on decision trees that operates by creating multiple decision trees during training. Each tree is trained on a random subset of the data. Additionally, when splitting each node, a random subset of features is considered rather than all features. The final output is determined by aggregating the predictions from these multiple trees, typically using majority voting.
-
 #### 2.4.3 K-nearest neighbour(KNN)
-
-#### 2.4.4 artificial neural networks(ANN)
+#### 2.4.4 Artificial neural networks(ANN)
 
 ### 2.5 Evaluation
+Objective: Assess the performance of each model using relevant metrics and validation techniques.
 
 ### 2.6 GO enrichment/ Gene set enrichment/ Pathway Analysis
-
+Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
 
 ## 3. Results
 
-### 3.1 Load the dataset from the original database or referenced papers? we can discuss this later.
-The following code downloads the dataset from an online TCGA database.
+### 3.1 Load the dataset 
+We start exploring the datasets from the online database or referenced papers.
+1. The following code downloads the dataset from an online TCGA database [1].
 ```{r library, echo=FALSE, results='hide'}
 suppressMessages({
 if (!requireNamespace("BiocManager", quietly = TRUE)) 
@@ -95,15 +109,12 @@ sample_types_filtered <- colData(data)$sample_type[filtered_samples]
 data.counts$Sample_Type <- sample_types_filtered
 ```
 
-```{r preprocessing}
-
-```
-
-The following code reads the dataset from the supplementary file S1 provided by the reference paper.
+2. The following code reads the dataset from the supplementary file S1 provided by the reference paper[2].
 ```{r load data from paper}
 data_from_paper <- read.csv("CRC_paper_dataset.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
 dim(data_from_paper) # 23182 genes 696 samples
 ```
+
 
 ## 4. Discussion
 
