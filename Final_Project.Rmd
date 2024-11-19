@@ -73,11 +73,12 @@ suppressMessages({
 if (!requireNamespace("BiocManager", quietly = TRUE)) 
   install.packages("BiocManager")
   BiocManager::install("TCGAbiolinks")
+  BiocManager::install("edgeR")
 library(TCGAbiolinks)
 library(SummarizedExperiment)
 # View all projects
 # View(TCGAbiolinks:::getGDCprojects())
-
+library(edgeR)
 library(tidyverse)
 library(randomForest)
 library(matrixStats)
@@ -85,7 +86,7 @@ library(matrixStats)
 ```
 
 ```{r load data from TCGA}
-# Download RNA-Seq data for selected projects
+# 1. Download RNA-Seq data for selected projects
 sink(tempfile())
 suppressMessages({
 query <- GDCquery(
@@ -99,14 +100,126 @@ data <- GDCprepare(query)
 })
 sink()
 
-# Select the tumor samples and normal samples
-## table(colData(data)$sample_type)
+# 2. Select the tumor samples and normal samples
+## table(colData(data)$sample_type) ##Metastatic:1; Primary Tumor:481; Recurrent Tumor Solid:1; Tissue Normal:41;
 filtered_samples <- colData(data)$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
 data_filtered <- assays(data)$unstranded[, filtered_samples]
-data.counts <- data.frame(t(data_filtered))
-dim(data.counts) # 60661 genes 522 samples
+dim(data_filtered) # 60661 genes 522 samples
 sample_types_filtered <- colData(data)$sample_type[filtered_samples]
-data.counts$Sample_Type <- sample_types_filtered
+table(sample_types_filtered)  ##Primary Tumor: 481; Solid Tissue Normal:41
+
+data.counts <- data.frame(data_filtered)
+dim(data.counts)
+#data.counts$Sample_Type <- sample_types_filtered
+```
+
+### 3.2 Exploring and filtering the dataset
+The whole datsets have different sequencing depth.
+```{r Exploring-1}
+#anyNA(data_filtered) check missing data 
+sample_totals <- colSums(data_filtered)
+hist(sample_totals, breaks = 30, main = "Total Reads per Sample",xlab = "Total Counts")
+```
+
+```{r filtering-1}
+# 1. Sample must have 20M reads
+idx <- colSums(data_filtered) >= 20E6
+data_filtered_new <- data_filtered[,idx]
+sample_types_filtered_new <- sample_types_filtered[idx]
+length(sample_types_filtered_new)
+table(sample_types_filtered_new)  ##Primary Tumor：386 Solid Tissue Normal：41
+dim(data_filtered_new)
+```
+
+```{r filtering-2}
+# 2. Filtering out lowly expressed genes based on the log2(CPM)
+data_cpm <- cpm(data_filtered_new, log = TRUE)
+proportion_threshold <- 0.05
+num_samples <- ncol(data_filtered_new)
+keep_genes <- rowSums(data_cpm > 1) >= (proportion_threshold * num_samples)
+dim(data_filtered_new[keep_genes, ])
+data_filtered_new = data_filtered_new[keep_genes, ]
+
+# dynamic parameter
+#data_cpm <- cpm(data_filtered_new, log = TRUE)
+#qnt.cut <- 0.30
+#mean_values <- rowMeans(data_cpm)
+#filtered_genes <- mean_values > quantile(mean_values, qnt.cut)
+#dim(data_filtered_new[filtered_genes, ])
+
+```
+
+### 3.3 Normalization 
+Use DESeq2 to compute VST expression values
+```{r Normalization-VST}
+data_vst <- DESeq2::varianceStabilizingTransformation(data_filtered_new)
+data_vst <- data_vst - min(data_vst)
+```
+
+
+```{r Normalization-VST2}
+# Plot the expression profile of a random gene after the normalization 
+set.seed(3)
+
+data_vst %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "Gene") %>% 
+  filter(Gene == sample(rownames(data_vst),1)) %>% 
+  pivot_longer(-Gene, names_to = "Sample", values_to = "Expression") %>% 
+  mutate(Sample = as.numeric(row_number())) %>% 
+  ggplot(aes(x = Sample, y = Expression)) +
+  geom_line() +
+  theme_bw()
+```
+
+### 3.4 PCA
+The first two components only explain 26.92% of the cumulative variance.
+```{r PCA1}
+data.pca <- prcomp(t(data_vst))
+# Summary of components
+summary(data.pca)$importance[3,][1:10]
+```
+
+
+```{r PCA2}
+classes <- sample_types_filtered_new %>% factor()
+data.pca$x %>% 
+  ggplot(aes(PC1, PC2, col = classes)) +
+  geom_point()
+```
+
+### 3.5 Differential Expression Analysis
+calculate the log2FC and FDR
+```{r DEA1}
+# Read in RNA-Seq count data and design
+dds <- DESeq2::DESeqDataSetFromMatrix(
+  countData = data_filtered_new,
+  colData = data.frame(condition = factor(classes, levels = c("Primary Tumor","Solid Tissue Normal"))),
+  design = ~ condition)
+
+# Names of samples
+colnames(dds)
+
+# Conditions of the samples
+dds$condition
+
+dds <- DESeq2::DESeq(dds)
+ 
+```
+
+```{r DEA2}
+res <- DESeq2::results(dds)
+as.data.frame(res)[1:10,]
+
+res <- as.data.frame(res)
+
+res0.05 <- res %>% 
+  filter(padj< 0.05) %>% 
+  arrange(padj)
+
+head(res0.05)
+#dim(res0.05) #12945
+
 ```
 
 2. The following code reads the dataset from the supplementary file S1 provided by the reference paper[2].
