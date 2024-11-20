@@ -198,10 +198,10 @@ dds <- DESeq2::DESeqDataSetFromMatrix(
   design = ~ condition)
 
 # Names of samples
-colnames(dds)
+#colnames(dds)
 
 # Conditions of the samples
-dds$condition
+#dds$condition
 
 dds <- DESeq2::DESeq(dds)
  
@@ -217,10 +217,19 @@ res0.05 <- res %>%
   filter(padj< 0.05) %>% 
   arrange(padj)
 
-head(res0.05)
-#dim(res0.05) #12945
+#head(res0.05)
+dim(res0.05) #12945
 
 ```
+
+```{r DEA3}
+DEGs_up <- sum(res0.05$log2FoldChange>0)
+DEGs_down <- sum(res0.05$log2FoldChange<0)
+
+print(DEGs_up)
+print(DEGs_down)
+```
+
 
 2. The following code reads the dataset from the supplementary file S1 provided by the reference paper[2].
 ```{r load data from paper}
