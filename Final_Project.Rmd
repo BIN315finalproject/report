@@ -49,19 +49,21 @@ Objective: Identify genes with significant differential expression between tumor
 Plan:
   Calculate log Fold Change (logFC) and False Discovery Rate (FDR) to identify differentially expressed genes.
 
-### 2.4 Supervised Methods
+### 2.4 GO enrichment/ Gene set enrichment/ Pathway Analysis
+Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
+
+### 2.5 Supervised Methods
 Objective: Use supervised learning algorithms to classify samples as tumor or normal based on gene expression data.
 
-#### 2.4.1 Class Balance and Feature selection
-#### 2.4.2 Random forest(RF)
-#### 2.4.3 K-nearest neighbour(KNN)
-#### 2.4.4 Artificial neural networks(ANN)
+#### 2.5.1 Class Balance and Feature selection
+#### 2.5.2 Random forest(RF)
+#### 2.5.3 K-nearest neighbour(KNN)
+#### 2.5.4 Artificial neural networks(ANN)
 
-### 2.5 Evaluation
+### 2.6 Evaluation
 Objective: Assess the performance of each model using relevant metrics and validation techniques.
 
-### 2.6 GO enrichment/ Gene set enrichment/ Pathway Analysis
-Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
+
 
 ## 3. Results
 
@@ -199,37 +201,62 @@ dds <- DESeq2::DESeqDataSetFromMatrix(
 
 # Names of samples
 #colnames(dds)
-
 # Conditions of the samples
 #dds$condition
 
 dds <- DESeq2::DESeq(dds)
- 
+res <- DESeq2::results(dds)
+as.data.frame(res)[1:10,]
+res <- as.data.frame(res)
+res0.05 <- res %>% 
+  filter(padj< 0.01 & abs(log2FoldChange)>1.5) %>% 
+  arrange(padj)
+
+head(res0.05)
+dim(res0.05)
 ```
 
 ```{r DEA2}
-res <- DESeq2::results(dds)
-as.data.frame(res)[1:10,]
-
-res <- as.data.frame(res)
-
-res0.05 <- res %>% 
-  filter(padj< 0.05) %>% 
-  arrange(padj)
-
-#head(res0.05)
-dim(res0.05) #12945
-
-```
-
-```{r DEA3}
 DEGs_up <- sum(res0.05$log2FoldChange>0)
 DEGs_down <- sum(res0.05$log2FoldChange<0)
 
 print(DEGs_up)
 print(DEGs_down)
+
 ```
 
+```{r DEA3}
+res %>% 
+  filter(baseMean>0 & log2FoldChange > -10 & !is.na(padj)) %>% 
+  mutate(DEGs = ifelse(padj< 0.01 & abs(log2FoldChange)>1.5 , "TRUE", "FALSE")) %>% 
+  ggplot(aes(x = log2FoldChange, y = 1/padj, color = DEGs )) +
+  geom_point(size = 1) +
+  scale_y_log10() +
+  scale_color_manual(values = c("TRUE" = "blue", "FALSE" = "red")) + 
+  labs(
+    x = "log2FoldChange",
+    y = "-log10(padj)"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 8),
+    axis.title = element_text(size = 10),
+    legend.title = element_text(size = 10)
+  )
+```
+
+
+### 3.6 Modeling
+```{r Modelingi}
+
+
+```
+
+### 3.7 
+```{r Modelingi}
+
+
+```
 
 2. The following code reads the dataset from the supplementary file S1 provided by the reference paper[2].
 ```{r load data from paper}
