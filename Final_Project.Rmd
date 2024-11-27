@@ -1,8 +1,12 @@
 ---
 title: "Transcriptome Analysis in Colorectal Cancer Diagnostics"
-output: html_document
 author: "Group 2: Joudy Raba Bakri Radwan Mouhaffel, Lea Skaar-Henriksen, Haldor Haugen, Gege Liu"
 date: "2024-11-08"
+output:
+  html_document:
+    toc: true            
+    toc_depth: 4         
+    toc_float: true      
 ---
 
 ```{r setup, include=FALSE}
@@ -12,74 +16,35 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Abstract
 
 ## 1. Introduction
+For the BIN315 course project, our group made a decision to investigate a dataset from TCGA-COAD, a Cancer Genome Atlas initiative focusing on colorectal cancer (CRC). Our goal was to apply our knowledge in differential gene expression analysis, machine learning, and enrichment analysis to gain a deeper understanding of this disease.  This report presents our efforts and findings that may provide valuable insights.
+
+### 1.1 Dataset
+In this study, we utilized the TCGA-COAD dataset, which is publicly available through the Cancer Genome Atlas (TCGA) research network at https://portal.gdc.cancer.gov/, and contains multi-omics data. We specifically focused on RNA-Seq data, accessed via the TCGAbiolinks R package[1]. This dataset includes a key attribute, sample_type, which allows us to distinguish between primary tumor samples and solid tissue normal samples, making it well-suited for classification analysis.
 
 ## 2. Methods
-
-### Dataset
-In this study, we utilized the TCGA-COAD dataset, which is publicly available through the Cancer Genome Atlas (TCGA) research network at https://portal.gdc.cancer.gov/, and contains multi-omics data. We specifically focused on RNA-Seq data, accessed via the TCGAbiolinks R package[1]. This dataset includes a key attribute, sample_type, which allows us to distinguish between primary tumor samples and solid tissue normal samples, making it well-suited for classification analysis. The primary objective of this study was to explore how gene expression changes associated with colorectal cancer (CRC) can be identified and used to predict CRC, while applying key concepts in differential analysis, supervised learning methods, and enrichment analysis as taught in the Functional Genomics BIN315 course.
-
-### 2.1 Data Exploration and Preprosessing
-#### 2.1.1 Exploration
-Plan:
-  Load and visualize basic data characteristics, such as the number of samples, genes, and overall data distribution.
-Generate basic statistics and visualizations (e.g., distribution plots, correlation matrices) to evaluate data quality initially.
-
-#### 2.1.2 Filtering
-Plan:
-  Set filtering thresholds (e.g., low expression threshold) to remove genes with low or no expression.
-
-#### 2.1.3 Normalization 
-Plan:
-  Normalize data using Variance Stabilizing Transformation (VST) to reduce the impact of technical variation.
-
-### 2.2 Principal Component Analysis / Clustering 
-Objective: Use PCA to assess whether the data can be classified effectively
-
-Principle: 
-  PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, namely principal components. This transformation can improve computational efficiency while retaining most of the original information, while facilitating visualization exploration and feature selection.
-
-Plan:
-  1. Perform PCA and plot the principal components to observe the distribution of tumor and normal samples.
-  2. Conduct clustering analysis (e.g., K-means or hierarchical clustering) to further assess the patterns.
-  3. Discuss the insights gained from PCA/clustering results and evaluate the feasibility of classification with machine learning.
-
-### 2.3 Differential Expression Analysis 
-Objective: Identify genes with significant differential expression between tumor and normal samples.
-
-Plan:
-  Calculate log Fold Change (logFC) and False Discovery Rate (FDR) to identify differentially expressed genes.
-
-### 2.4 GO enrichment/ Gene set enrichment/ Pathway Analysis
-Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
-
-### 2.5 Supervised Methods
-Objective: Use supervised learning algorithms to classify samples as tumor or normal based on gene expression data.
-
-#### 2.5.1 Class Balance and Feature selection
-#### 2.5.2 Random forest(RF)
-#### 2.5.3 K-nearest neighbour(KNN)
-#### 2.5.4 Artificial neural networks(ANN)
-
-### 2.6 Evaluation
-Objective: Assess the performance of each model using relevant metrics and validation techniques.
-
-
-
-## 3. Results
-
-### 3.1 Load the dataset 
-We start exploring the datasets from the online database or referenced papers.
-1. The following code downloads the dataset from an online TCGA database [1].
+### 2.1 Libraries
+The libraries used in our analysis are listed below.
 ```{r library, echo=FALSE, results='hide'}
 suppressMessages({
-if (!requireNamespace("BiocManager", quietly = TRUE)) 
-  install.packages("BiocManager")
-  BiocManager::install("TCGAbiolinks")
-  BiocManager::install("edgeR")
+  # Ensure BiocManager is installed
+  if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+  }
+  
+  # Install required Bioconductor packages if not already installed
+  required_packages <- c("TCGAbiolinks", "edgeR", "SummarizedExperiment")
+  for (pkg in required_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      BiocManager::install(pkg)
+    }
+  }
+})
+```
+
+```{r library-show, results='hide'}
+suppressMessages({
 library(TCGAbiolinks)
 library(SummarizedExperiment)
-# View all projects
-# View(TCGAbiolinks:::getGDCprojects())
 library(edgeR)
 library(tidyverse)
 library(randomForest)
@@ -87,122 +52,220 @@ library(matrixStats)
 })
 ```
 
-```{r load data from TCGA}
+### 2.2 Exploring and preprocessing
+```{r load data from TCGA, echo=FALSE, results='hide'}
 # 1. Download RNA-Seq data for selected projects
-sink(tempfile())
-suppressMessages({
-query <- GDCquery(
-  project = "TCGA-COAD",
-  data.category = "Transcriptome Profiling",
-  data.type = "Gene Expression Quantification",
-  workflow.type = "STAR - Counts"
-)
-GDCdownload(query, method = "api", files.per.chunk = 10)
-data <- GDCprepare(query)
-})
-sink()
+# sink(tempfile())
+# suppressMessages({
+# query <- GDCquery(
+#   project = "TCGA-COAD",
+#   data.category = "Transcriptome Profiling",
+#   data.type = "Gene Expression Quantification",
+#   workflow.type = "STAR - Counts"
+# )
+# GDCdownload(query, method = "api", files.per.chunk = 10)
+# data <- GDCprepare(query)
+# })
+# sink()
+# 
+# # 2. Select the tumor samples and normal samples
+# filtered_samples <- colData(data)$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
+# data_filtered <- assays(data)$unstranded[, filtered_samples]
+# dim(data_filtered) # 60661 genes 522 samples
+# sample_types_filtered <- colData(data)$sample_type[filtered_samples]
+# table(sample_types_filtered)  ##Primary Tumor: 481; Solid Tissue Normal:41
+# 
+# saveRDS(data_filtered, file = "data_filtered.rds")
+# saveRDS(sample_types_filtered, file = "sample_types_filtered.rds")
+```
 
-# 2. Select the tumor samples and normal samples
-## table(colData(data)$sample_type) ##Metastatic:1; Primary Tumor:481; Recurrent Tumor Solid:1; Tissue Normal:41;
-filtered_samples <- colData(data)$sample_type %in% c("Primary Tumor", "Solid Tissue Normal")
-data_filtered <- assays(data)$unstranded[, filtered_samples]
-dim(data_filtered) # 60661 genes 522 samples
-sample_types_filtered <- colData(data)$sample_type[filtered_samples]
-table(sample_types_filtered)  ##Primary Tumor: 481; Solid Tissue Normal:41
+#### 2.2.1 Exploring
+This dataset contains gene expression data of various samples. It consists of 522 columns (each column represents a different sample) and 60,660 rows (each row corresponds to a gene transcript).
+
+```{r load data}
+data_filtered <- readRDS("data_filtered.rds")
+sample_types_filtered <- readRDS("sample_types_filtered.rds")
 
 data.counts <- data.frame(data_filtered)
 dim(data.counts)
-#data.counts$Sample_Type <- sample_types_filtered
+data.counts[1:5,1:2]
 ```
 
-### 3.2 Exploring and filtering the dataset
-The whole datsets have different sequencing depth.
-```{r Exploring-1}
-#anyNA(data_filtered) check missing data 
-sample_totals <- colSums(data_filtered)
-hist(sample_totals, breaks = 30, main = "Total Reads per Sample",xlab = "Total Counts")
+Then, a sample type distribution plot was drawn, with 481 “primary tumor” type samples and 41 “solid tissue normal” type samples. It can be seen that the number of tumor samples is higher than that of normal tissue samples.
+
+```{r Exploring 1}
+names(sample_types_filtered) <- colnames(data_filtered)
+sample_info <- data.frame(Sample = names(sample_types_filtered), SampleType = sample_types_filtered)
+
+# Plot the distribution
+sample_info %>% 
+  group_by(SampleType) %>% 
+  summarize(Count = n()) %>% 
+  ggplot(aes(x = SampleType, y = Count, fill = SampleType)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(title = "Fig.1. Sample Type Distribution", x = "Sample Type", y = "Count") + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
-```{r filtering-1}
+#### 2.2.2 Preprocessing
+We observed that most genes in the dataset have only one transcript, and a few genes (such as ENSG00000002586.20 and ENSG00000002586.20_PAR_Y) have two transcripts. Meanwhile, the ENSG00000002586.20_PAR_Y transcript has zero expression across all samples, providing no meaningful information for downstream analyses. 
+
+```{r Preprocessing-1}
+data.counts %>%
+  rownames_to_column(var = "Gene") %>% 
+  filter(Gene %in% c("ENSG00000002586.20", "ENSG00000002586.20_PAR_Y")) %>% 
+  select(1:3)
+```
+
+Therefore, removing these redundant transcripts can help simplify the dataset and reduce noise while retaining the biological significance of most of the data. After excluding 44 invalid transcripts, we also removed the transcript IDs from the gene names. In addition, considering that the upcoming analysis will involve DESeq2, DESeq2 recommends using safe characters in column names and row names to avoid potential problems. So, we replaced the '.' character in the column name with a '-' character.
+
+```{r Preprocessing-2}
+data.counts <- data.counts %>% 
+  rownames_to_column(var = "Gene") %>%
+  filter(!grepl("_PAR", Gene)) %>%
+  mutate(Gene = sub("\\..*", "", Gene))
+
+colnames(data.counts) <- gsub("\\.", "-", colnames(data.counts))
+
+data.counts[1:2,1:3]
+```
+
+#### 2.2.3 Quality control
+From the figure below, we can see that the total reads of most samples are in the range of 2e+07 to 6e+07. The lower reads on the left side of the histogram indicate that that the sequencing depth of some samples may be low, which may mean that the gene expression in these samples is low. To improve the quality and reliability of downstream data analysis, we performed quality control, such as removing low-quality genes and samples.
+
+```{r Filtering-1}
+anyNA(data.counts)
+
+data.counts <- data.counts %>% 
+  column_to_rownames(var = 'Gene')
+
+sample_totals <- colSums(data.counts)
+sample_totals_df <- data.frame(TotalCounts = sample_totals)
+
+ggplot(sample_totals_df, aes(x = TotalCounts)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "grey") +
+  labs(title = "Fig.2. Total Reads per Sample", x = "Total Counts", y = "Frequency") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+First, we removed some low-quality samples with less than 20 million expression data. Next, from the gene perspective, we removed genes with low expression in most samples based on the log2 (CPM) transformation of the expression data. After the above steps, the cleaned dataset retained 14,633 genes and 427 samples.
+
+```{r Filtering-2}
 # 1. Sample must have 20M reads
-idx <- colSums(data_filtered) >= 20E6
-data_filtered_new <- data_filtered[,idx]
+idx <- colSums(data.counts) >= 20E6
+data.counts.new <- data.counts[,idx]
 sample_types_filtered_new <- sample_types_filtered[idx]
-length(sample_types_filtered_new)
-table(sample_types_filtered_new)  ##Primary Tumor：386 Solid Tissue Normal：41
-dim(data_filtered_new)
-```
 
-```{r filtering-2}
 # 2. Filtering out lowly expressed genes based on the log2(CPM)
-data_cpm <- cpm(data_filtered_new, log = TRUE)
+data.counts.cpm <- cpm(data.counts.new, log = TRUE)
 proportion_threshold <- 0.05
-num_samples <- ncol(data_filtered_new)
-keep_genes <- rowSums(data_cpm > 1) >= (proportion_threshold * num_samples)
-dim(data_filtered_new[keep_genes, ])
-data_filtered_new = data_filtered_new[keep_genes, ]
-
-# dynamic parameter
-#data_cpm <- cpm(data_filtered_new, log = TRUE)
-#qnt.cut <- 0.30
-#mean_values <- rowMeans(data_cpm)
-#filtered_genes <- mean_values > quantile(mean_values, qnt.cut)
-#dim(data_filtered_new[filtered_genes, ])
-
+num_samples <- ncol(data.counts.new)
+keep_genes <- rowSums(data.counts.cpm) >= (proportion_threshold * num_samples)
+data.counts.cpm = data.counts.cpm[keep_genes, ]
+dim(data.counts.cpm)
 ```
 
-### 3.3 Normalization 
-Use DESeq2 to compute VST expression values
+#### 2.2.4 Normalization 
+
 ```{r Normalization-VST}
-data_vst <- DESeq2::varianceStabilizingTransformation(data_filtered_new)
+data_vst <- DESeq2::varianceStabilizingTransformation(as.matrix(data.counts.new))
 data_vst <- data_vst - min(data_vst)
 ```
 
-
 ```{r Normalization-VST2}
-# Plot the expression profile of a random gene after the normalization 
-set.seed(3)
+# # Plot the expression profile of a random gene after the normalization 
+# set.seed(3)
+# 
+# data_vst %>% 
+#   as.data.frame() %>% 
+#   rownames_to_column(var = "Gene") %>% 
+#   filter(Gene == sample(rownames(data_vst),1)) %>% 
+#   pivot_longer(-Gene, names_to = "Sample", values_to = "Expression") %>% 
+#   mutate(Sample = as.numeric(row_number())) %>% 
+#   ggplot(aes(x = Sample, y = Expression)) +
+#   geom_line() +
+#   theme_bw()
 
-data_vst %>% 
-  as.data.frame() %>% 
-  rownames_to_column(var = "Gene") %>% 
-  filter(Gene == sample(rownames(data_vst),1)) %>% 
-  pivot_longer(-Gene, names_to = "Sample", values_to = "Expression") %>% 
-  mutate(Sample = as.numeric(row_number())) %>% 
-  ggplot(aes(x = Sample, y = Expression)) +
-  geom_line() +
-  theme_bw()
 ```
 
-### 3.4 PCA
-The first two components only explain 26.92% of the cumulative variance.
+
+### 2.3 Principal Component Analysis
+PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, i.e., principal components. This transformation preserves most of the original information while being computationally efficient, reducing noise, and facilitating visual exploration and feature selection. We tired to performs principal component analysis by the prcomp() function to better understand our dataset and choose the number of principal components for dimensionality reduction.
+
+### 2.3 CLustering
+Clustering is an unsupervised method that aims to group unlabeled data and summarize its pattern. There are two main different categories based on methodology: Hierarchical Clustering Analysis (HCA) and Non-Hierarchical Clustering Analysis (Non-HCA). We want to cluster the dataset by naturally without the features of color and quality, so we remove these two features before clustering. Agglomerative clustering is a hierarchical clustering method that starts with dividing each data point as a single cluster and calculating the distance between clusters based on a linkage criterion. It iterates step by step until all data points are merged into a predetermined number of clusters. At the same time, the entire hierarchical clustering process can be clearly visualized through a dendrogram.
+
+
+### 2.4 Differential Expression Analysis 
+
+### 2.5 GO enrichment/ Gene set enrichment/ Pathway Analysis
+Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
+
+### 2.6 Supervised Methods
+Objective: Use supervised learning algorithms to classify samples as tumor or normal based on gene expression data.
+
+#### 2.6.1 Class Balance and Feature selection
+#### 2.6.2 Random forest(RF)
+#### 2.6.3 K-nearest neighbour(KNN)
+#### 2.6.4 Artificial neural networks(ANN)
+
+### 2.7 Evaluation
+Objective: Assess the performance of each model using relevant metrics and validation techniques.
+
+
+
+## 3. Results
+
+### 3.1 PCA
+The first two components only explain 26.92% of the cumulative variance. which is noramlly. Need to explain? High dimensionality of data and linearity of PCA
 ```{r PCA1}
 data.pca <- prcomp(t(data_vst))
+
 # Summary of components
-summary(data.pca)$importance[3,][1:10]
+cumulative_variance <- summary(data.pca)$importance[3,]
+variance_df <- data.frame(PC = seq_along(cumulative_variance),CumulativeVariance = cumulative_variance)
+
+ggplot(variance_df, aes(x = PC, y = CumulativeVariance)) +
+  geom_line(color = "black") +
+  geom_point(color = "lightblue") + 
+  theme_bw() + 
+  labs( title = "Fig.3. Cumulative Variance Ratio", 
+        x = "Numbers of Principal Components", 
+        y = "Cumulative Variance Explained"
+        ) +
+  scale_x_continuous(breaks = seq(0, length(cumulative_variance), by = 20)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+  )
 ```
 
 
 ```{r PCA2}
 classes <- sample_types_filtered_new %>% factor()
+
 data.pca$x %>% 
   ggplot(aes(PC1, PC2, col = classes)) +
-  geom_point()
+  geom_point() +
+  labs(title = "Fig.4. PCA Visualization", x = "PC1", y = "PC2") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
-### 3.5 Differential Expression Analysis
-calculate the log2FC and FDR
+### 3.2 Clustering
+
+
+
+### 3.3 Differential Expression Analysis
+#### 3.3.1 calculate the log2FC and FDR
 ```{r DEA1}
 # Read in RNA-Seq count data and design
+suppressMessages({
 dds <- DESeq2::DESeqDataSetFromMatrix(
-  countData = data_filtered_new,
+  countData = as.matrix(data.counts.new),
   colData = data.frame(condition = factor(classes, levels = c("Primary Tumor","Solid Tissue Normal"))),
   design = ~ condition)
-
-# Names of samples
-#colnames(dds)
-# Conditions of the samples
-#dds$condition
 
 dds <- DESeq2::DESeq(dds)
 res <- DESeq2::results(dds)
@@ -214,8 +277,10 @@ res0.05 <- res %>%
 
 head(res0.05)
 dim(res0.05)
+})
 ```
 
+filtering the differential genes based on the log2FoldChange and FDR.
 ```{r DEA2}
 DEGs_up <- sum(res0.05$log2FoldChange>0)
 DEGs_down <- sum(res0.05$log2FoldChange<0)
@@ -225,6 +290,7 @@ print(DEGs_down)
 
 ```
 
+#### 3.3.2 Vulcano plot
 ```{r DEA3}
 res %>% 
   filter(baseMean>0 & log2FoldChange > -10 & !is.na(padj)) %>% 
@@ -232,37 +298,24 @@ res %>%
   ggplot(aes(x = log2FoldChange, y = 1/padj, color = DEGs )) +
   geom_point(size = 1) +
   scale_y_log10() +
-  scale_color_manual(values = c("TRUE" = "blue", "FALSE" = "red")) + 
-  labs(
-    x = "log2FoldChange",
-    y = "-log10(padj)"
-  ) +
+  labs(x = "log2FoldChange", y = "-log10(padj)", title = "Fig.5. Vulcano plot") +
   theme_bw() +
-  theme(
-    axis.text = element_text(size = 8),
-    axis.title = element_text(size = 10),
-    legend.title = element_text(size = 10)
-  )
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
 
-### 3.6 Modeling
-```{r Modelingi}
+### 3.3 Go Enrichment Analysis
+```{r Enrichmnent Analysis}
 
 
 ```
 
-### 3.7 
-```{r Modelingi}
+### 3.4 Modelling
+```{r Modeling}
 
 
 ```
 
-2. The following code reads the dataset from the supplementary file S1 provided by the reference paper[2].
-```{r load data from paper}
-data_from_paper <- read.csv("CRC_paper_dataset.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
-dim(data_from_paper) # 23182 genes 696 samples
-```
 
 
 ## 4. Discussion
