@@ -49,6 +49,9 @@ library(edgeR)
 library(tidyverse)
 library(randomForest)
 library(matrixStats)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(dplyr)
 })
 ```
 
@@ -85,7 +88,6 @@ This dataset contains gene expression data of various samples. It consists of 52
 ```{r load data}
 data_filtered <- readRDS("data_filtered.rds")
 sample_types_filtered <- readRDS("sample_types_filtered.rds")
-
 data.counts <- data.frame(data_filtered)
 dim(data.counts)
 data.counts[1:5,1:2]
@@ -94,7 +96,7 @@ data.counts[1:5,1:2]
 Then, a sample type distribution plot was drawn, with 481 “primary tumor” type samples and 41 “solid tissue normal” type samples. It can be seen that the number of tumor samples is higher than that of normal tissue samples.
 
 ```{r Exploring 1}
-names(sample_types_filtered) <- colnames(data_filtered)
+names(sample_types_filtered) <- colnames(data.counts)
 sample_info <- data.frame(Sample = names(sample_types_filtered), SampleType = sample_types_filtered)
 
 # Plot the distribution
@@ -115,10 +117,10 @@ We observed that most genes in the dataset have only one transcript, and a few g
 data.counts %>%
   rownames_to_column(var = "Gene") %>% 
   filter(Gene %in% c("ENSG00000002586.20", "ENSG00000002586.20_PAR_Y")) %>% 
-  select(1:3)
+  dplyr::select(1:3)
 ```
 
-Therefore, removing these redundant transcripts can help simplify the dataset and reduce noise while retaining the biological significance of most of the data. After excluding 44 invalid transcripts, we also removed the transcript IDs from the gene names. In addition, considering that the upcoming analysis will involve DESeq2, DESeq2 recommends using safe characters in column names and row names to avoid potential problems. So, we replaced the '.' character in the column name with a '-' character.
+Therefore, removing these redundant transcripts can help simplify the dataset and reduce noise while retaining the biological significance of most of the data. After excluding 44 invalid transcripts, we also removed the transcript IDs from the gene names. In addition, considering that the upcoming analysis will involve DESeq2, DESeq2 recommends using safe characters in column names and row names to avoid potential problems. So, we replaced the '.' character in the sample type name with a '-' character.
 
 ```{r Preprocessing-2}
 data.counts <- data.counts %>% 
@@ -126,9 +128,7 @@ data.counts <- data.counts %>%
   filter(!grepl("_PAR", Gene)) %>%
   mutate(Gene = sub("\\..*", "", Gene))
 
-colnames(data.counts) <- gsub("\\.", "-", colnames(data.counts))
-
-data.counts[1:2,1:3]
+sample_types_filtered <- gsub(" ", "_", sample_types_filtered) 
 ```
 
 #### 2.2.3 Quality control
@@ -139,7 +139,6 @@ anyNA(data.counts)
 
 data.counts <- data.counts %>% 
   column_to_rownames(var = 'Gene')
-
 sample_totals <- colSums(data.counts)
 sample_totals_df <- data.frame(TotalCounts = sample_totals)
 
@@ -156,15 +155,16 @@ First, we removed some low-quality samples with less than 20 million expression 
 # 1. Sample must have 20M reads
 idx <- colSums(data.counts) >= 20E6
 data.counts.new <- data.counts[,idx]
-sample_types_filtered_new <- sample_types_filtered[idx]
-
+sample_types_filtered <- sample_types_filtered[idx]
+dim(data.counts.new) #60616   427
 # 2. Filtering out lowly expressed genes based on the log2(CPM)
 data.counts.cpm <- cpm(data.counts.new, log = TRUE)
 proportion_threshold <- 0.05
 num_samples <- ncol(data.counts.new)
-keep_genes <- rowSums(data.counts.cpm) >= (proportion_threshold * num_samples)
-data.counts.cpm = data.counts.cpm[keep_genes, ]
-dim(data.counts.cpm)
+keep_genes <- rowSums(data.counts.cpm > 1) >= (proportion_threshold * num_samples)
+data.counts.new = data.counts.new[keep_genes, ]
+dim(data.counts.new)
+#rm(data.counts.cpm)
 ```
 
 #### 2.2.4 Normalization 
@@ -192,16 +192,13 @@ data_vst <- data_vst - min(data_vst)
 
 
 ### 2.3 Principal Component Analysis
-PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, i.e., principal components. This transformation preserves most of the original information while being computationally efficient, reducing noise, and facilitating visual exploration and feature selection. We tired to performs principal component analysis by the prcomp() function to better understand our dataset and choose the number of principal components for dimensionality reduction.
-
-### 2.3 CLustering
-Clustering is an unsupervised method that aims to group unlabeled data and summarize its pattern. There are two main different categories based on methodology: Hierarchical Clustering Analysis (HCA) and Non-Hierarchical Clustering Analysis (Non-HCA). We want to cluster the dataset by naturally without the features of color and quality, so we remove these two features before clustering. Agglomerative clustering is a hierarchical clustering method that starts with dividing each data point as a single cluster and calculating the distance between clusters based on a linkage criterion. It iterates step by step until all data points are merged into a predetermined number of clusters. At the same time, the entire hierarchical clustering process can be clearly visualized through a dendrogram.
-
+PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, i.e., principal components. This transformation can help us not only retain most of the original information when selecting several principle components, but also improve computational efficiency, reduce noise, and enable dataset visualization and feature selection [3]. We tired to performs principal component analysis by the prcomp() function to better understand our dataset and choose the number of principal components for dimensionality reduction.
 
 ### 2.4 Differential Expression Analysis 
 
-### 2.5 GO enrichment/ Gene set enrichment/ Pathway Analysis
-Objective: Investigate the biological significance of differentially expressed genes by identifying enriched biological processes, molecular functions, and pathways.
+
+### 2.5 Go Enrichment Analysis
+
 
 ### 2.6 Supervised Methods
 Objective: Use supervised learning algorithms to classify samples as tumor or normal based on gene expression data.
@@ -219,12 +216,25 @@ Objective: Assess the performance of each model using relevant metrics and valid
 ## 3. Results
 
 ### 3.1 PCA
-The first two components only explain 26.92% of the cumulative variance. which is noramlly. Need to explain? High dimensionality of data and linearity of PCA
+The results of the PCA are illustrated in Fig. 3 and Fig. 4, which depict the cumulative variance explained by the principal components and the dataset visualization based on PC1 and PC2, respectively.
+
+As can be seen from the table below and Fig.3, the first two components only explain 26.92% of the cumulative variance, which is not very ideal. However, the first 20 principal components can explain 64% of the cumulative variance. 
+
+We can consider the reasons behind the low proportion of variance explained by the first two principal components. First of all,  the dataset includes over 14,000 genes,  which creates a very high-dimensional data space. However, we only have about 400 samples, which is much smaller than the number of genes. This imbanlance makes it harder to capture the variation,  since the dimentionality reductions works better with more samples. Secondly, many genes in the dataset are highly correlated, which adds complexity to the data, resulting each components can explain less variance. Lastly, gene expression data naturally have complex patterns and interactions between genes, making it difficult for the first few principal components to capture a large proportion of the variance.
+
 ```{r PCA1}
+# Perform the PCA
 data.pca <- prcomp(t(data_vst))
 
 # Summary of components
 cumulative_variance <- summary(data.pca)$importance[3,]
+cumulative_variance[1:30] # show the first 30 principle components
+```
+
+Beyond the 60th principal component, the curve of cumulative variance is smoother, indicating that the contributions of other components gradually decrease.
+
+```{r PCA2}
+# Plot the cumulative variance explained by the principle components
 variance_df <- data.frame(PC = seq_along(cumulative_variance),CumulativeVariance = cumulative_variance)
 
 ggplot(variance_df, aes(x = PC, y = CumulativeVariance)) +
@@ -241,9 +251,42 @@ ggplot(variance_df, aes(x = PC, y = CumulativeVariance)) +
   )
 ```
 
+In order to interpret our principal components, we hope to find which genes have the greatest impact on each PC. However, the number of original genes is too large, so we focus on the top ten important genes affecting PC1 and PC2.
 
-```{r PCA2}
-classes <- sample_types_filtered_new %>% factor()
+```{r PCA3}
+pc_loadings <- data.pca$rotation
+
+pc_loadings <- pc_loadings %>% 
+  as_tibble(rownames = "gene")
+
+genes_pc1 <- pc_loadings %>%
+  dplyr::select(gene, PC1) %>%
+  pivot_longer(matches("PC"), names_to = "PC", values_to = "loading") %>% 
+  group_by(PC) %>% 
+  arrange(desc(abs(loading))) %>% 
+  slice(1:10) %>% 
+  pull(gene) %>% 
+  unique()
+
+print(genes_pc1)
+
+genes_pc2 <- pc_loadings %>%
+  dplyr::select(gene, PC2) %>%
+  pivot_longer(matches("PC"), names_to = "PC", values_to = "loading") %>% 
+  group_by(PC) %>% 
+  arrange(desc(abs(loading))) %>% 
+  slice(1:10) %>% 
+  pull(gene) %>% 
+  unique()
+
+print(genes_pc2)
+
+```
+
+Then, we turn to visualize our samples on PC1 and PC2 space and distinguish the two classes. In this plot, there is a clear distinction between the primary tumor and solid tissue normal samples. The two classes are mostly separated by PC1, with primary tumors showing a more scattered distribution. And there are a few potential outliers in the lower right of the plot.
+
+```{r PCA4}
+classes <- sample_types_filtered %>% factor()
 
 data.pca$x %>% 
   ggplot(aes(PC1, PC2, col = classes)) +
@@ -253,18 +296,57 @@ data.pca$x %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-### 3.2 Clustering
+Therefore, we tried to check the potential outliers found before and remove them, because the number of these outliers was very small, only 18 samples, and these outliers could have a great impact on the subsequent analysis, so we decided to remove them and perform the PCA analysis again to check the results of the before and after PCA.
+```{r PCA5}
+# Try to find outliers
+pca_projection <- data.frame(Sample = rownames(data.pca$x), 
+                             PC1 = data.pca$x[, 1], 
+                             PC2 = data.pca$x[, 2])
 
+outliers <- pca_projection %>% 
+  filter(PC2 < -100)
+
+rownames(outliers)
+
+# Delete the outliers from the dataset
+idx_2 <- which(colnames(data_vst) %in% rownames(outliers))
+
+sample_types_filtered_new <- sample_types_filtered[-idx_2]
+data_vst <- data_vst %>% 
+  as.data.frame() %>% 
+  dplyr::select(-rownames(outliers))
+```
+
+Now, we can see that the new samples based on PC1 and PC2 are more reasonably distributed, and PC1 seems to play a greater role in splitting the two classes.
+
+```{r PCA6, echo=FALSE}
+# Perform the PCA
+data.pca <- prcomp(t(data_vst))
+classes_new <- sample_types_filtered_new %>% factor()
+
+data.pca$x %>% 
+  ggplot(aes(PC1, PC2, col = classes_new)) +
+  geom_point() +
+  labs(title = "Fig.5. PCA Visualization", x = "PC1", y = "PC2") +
+  theme_bw() + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 ### 3.3 Differential Expression Analysis
+
 #### 3.3.1 calculate the log2FC and FDR
 ```{r DEA1}
+# Delete the outliers from the dataset
+data.counts.new2 <- data.counts.new %>% 
+  as.data.frame() %>% 
+  dplyr::select(-rownames(outliers))
+dim(data.counts.new2) #17129   419
 # Read in RNA-Seq count data and design
 suppressMessages({
 dds <- DESeq2::DESeqDataSetFromMatrix(
-  countData = as.matrix(data.counts.new),
-  colData = data.frame(condition = factor(classes, levels = c("Primary Tumor","Solid Tissue Normal"))),
+  countData = as.matrix(data.counts.new2),
+  colData = data.frame(condition = factor(classes_new, levels = c("Primary_Tumor","Solid_Tissue_Normal"))),
   design = ~ condition)
 
 dds <- DESeq2::DESeq(dds)
@@ -298,7 +380,7 @@ res %>%
   ggplot(aes(x = log2FoldChange, y = 1/padj, color = DEGs )) +
   geom_point(size = 1) +
   scale_y_log10() +
-  labs(x = "log2FoldChange", y = "-log10(padj)", title = "Fig.5. Vulcano plot") +
+  labs(x = "log2FoldChange", y = "-log10(padj)", title = "Fig.6. Vulcano plot") +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
@@ -307,6 +389,10 @@ res %>%
 ### 3.3 Go Enrichment Analysis
 ```{r Enrichmnent Analysis}
 
+# go_pc1 <- enrichGO(gene = genes_pc1, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+# go_pc1_df <- as.data.frame(go_pc1)
+# go_pc2 <- enrichGO(gene = genes_pc2, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
+# go_pc2_df <- as.data.frame(go_pc2)
 
 ```
 
@@ -324,6 +410,8 @@ res %>%
 1. Colaprico, A. et al. TCGAbiolinks: an R/Bioconductor package for integrative analysis of TCGA data. Nucleic Acids Res. 44(8), e71 (2016).
 
 2. Maurya, N.S., Kushwaha, S., Chawade, A. et al. Transcriptome profiling by combined machine learning and statistical R analysis identifies TMEM236 as a potential novel diagnostic biomarker for colorectal cancer. Sci Rep 11, 14304 (2021).
+
+3.Ringnér, M. What is principal component analysis?. Nat Biotechnol 26, 303–304 (2008).
 
 
 
