@@ -296,7 +296,7 @@ data.pca$x %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-Therefore, we tried to check the potential outliers found before and remove them, because the number of these outliers was very small, only 18 samples, and these outliers could have a great impact on the subsequent analysis, so we decided to remove them and perform the PCA analysis again to check the results of the before and after PCA.
+Therefore, we tried to check the potential outliers found before and remove them, because the number of these outliers was very small, only 8 samples, and these outliers could have a great impact on the subsequent analysis, so we decided to remove them and perform the PCA analysis again to check the results of the before and after PCA.
 ```{r PCA5}
 # Try to find outliers
 pca_projection <- data.frame(Sample = rownames(data.pca$x), 
@@ -389,10 +389,11 @@ res %>%
 ### 3.3 Go Enrichment Analysis
 ```{r Enrichmnent Analysis}
 
-# go_pc1 <- enrichGO(gene = genes_pc1, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
-# go_pc1_df <- as.data.frame(go_pc1)
-# go_pc2 <- enrichGO(gene = genes_pc2, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
-# go_pc2_df <- as.data.frame(go_pc2)
+go_DEGs_up <- enrichGO(gene = DEGs_up, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+go_DEGs_up_df <- as.data.frame(go_DEGs_up)
+
+go_DEGs_down <- enrichGO(gene = DEGs_down, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
+go_DEGs_downdf <- as.data.frame(go_DEGs_down)
 
 ```
 
