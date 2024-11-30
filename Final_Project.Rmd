@@ -195,7 +195,9 @@ data_vst <- data_vst - min(data_vst)
 PCA is an unsupervised dimensionality reduction method that transforms the original feature set into a set of linearly independent variables, i.e., principal components. This transformation can help us not only retain most of the original information when selecting several principle components, but also improve computational efficiency, reduce noise, and enable dataset visualization and feature selection [3]. We tired to performs principal component analysis by the prcomp() function to better understand our dataset and choose the number of principal components for dimensionality reduction.
 
 ### 2.4 Differential Expression Analysis 
+The purpose of differential expression analysis in this study is to find out the genes whose expression data are upregulated or downregulated in normal samples and cancer samples through statistical tests. This approach helps to provide important insights for cancer research and find the potential biomarkers and mechanisms associated with tumor progression and recurrence [4].
 
+Here, we utilize the DESeq2 package, which is widely-used tool for differential genes analysis of RNA-seq data. DESeq2 package apply the negative binomial models to fit the count-based RNA-Seq data which is different from Limma package that uses linear linear models for the microarray data, as the RNA-Seq data has discrete and over-dispersed characteristics. The key steps in DESeq2 differential expression analysis include data normalization, fitting a negative binomial distribution, estimating dispersion, performing differential expression testing, and correcting for multiple hypothesis testing. Then, the threshold needs to be carefully selected when identifying DEGs (Differentially Expressed Genes), which is an important step to ensure the reliability and accuracy of the analysis results. The choice of measuring statistical significance, such as p-value, p-value adjusted by different techniques (padj), and the size of the difference (expressed as log2 fold change (l2FC)), is crucial because it actually directly affects the reliability of the results and the interpretation of the data [4].
 
 ### 2.5 Go Enrichment Analysis
 
@@ -297,6 +299,7 @@ data.pca$x %>%
 ```
 
 Therefore, we tried to check the potential outliers found before and remove them, because the number of these outliers was very small, only 8 samples, and these outliers could have a great impact on the subsequent analysis, so we decided to remove them and perform the PCA analysis again to check the results of the before and after PCA.
+
 ```{r PCA5}
 # Try to find outliers
 pca_projection <- data.frame(Sample = rownames(data.pca$x), 
@@ -335,13 +338,15 @@ data.pca$x %>%
 
 ### 3.3 Differential Expression Analysis
 
-#### 3.3.1 calculate the log2FC and FDR
+Here, we create a dataset object and specify the experimental conditions (such as "primary tumor" and "solid tissue normal") though the DESeqDataSetFromMatrix function. Then we use the DESeq function to perform differential expression analysis and extract the analysis results.
+
 ```{r DEA1}
 # Delete the outliers from the dataset
 data.counts.new2 <- data.counts.new %>% 
   as.data.frame() %>% 
   dplyr::select(-rownames(outliers))
 dim(data.counts.new2) #17129   419
+
 # Read in RNA-Seq count data and design
 suppressMessages({
 dds <- DESeq2::DESeqDataSetFromMatrix(
@@ -353,26 +358,41 @@ dds <- DESeq2::DESeq(dds)
 res <- DESeq2::results(dds)
 as.data.frame(res)[1:10,]
 res <- as.data.frame(res)
+})
+```
+
+Then, we screened out differentially expressed genes based on log2FoldChange and padj, and the thresholds of these two parameters were selected based on the Maurya paper [2]. A total of 2803 genes were screened, including 1389 up-regulated genes and 1414 down-regulated genes.
+
+```{r DEA2}
 res0.05 <- res %>% 
   filter(padj< 0.01 & abs(log2FoldChange)>1.5) %>% 
   arrange(padj)
 
-head(res0.05)
 dim(res0.05)
-})
+
+DEGs_up_genes <- res0.05[res0.05$log2FoldChange>0,] %>% 
+  rownames_to_column("Gene") %>% 
+  dplyr::select("Gene") %>% 
+  pull("Gene")
+
+head(res0.05[res0.05$log2FoldChange>0,])
+  
+DEGs_down_genes <- res0.05[res0.05$log2FoldChange<0,] %>% 
+  rownames_to_column("Gene") %>% 
+  dplyr::select("Gene") %>% 
+  pull("Gene")
+
+head(res0.05[res0.05$log2FoldChange<0,])
+
+#The number of upregulated genes
+print(length(DEGs_up_genes))
+
+#The number of downregulated genes
+print(length(DEGs_down_genes))
 ```
 
-filtering the differential genes based on the log2FoldChange and FDR.
-```{r DEA2}
-DEGs_up <- sum(res0.05$log2FoldChange>0)
-DEGs_down <- sum(res0.05$log2FoldChange<0)
+Finally, the results can be visualized to easily observe patterns and gain some potential understanding.
 
-print(DEGs_up)
-print(DEGs_down)
-
-```
-
-#### 3.3.2 Vulcano plot
 ```{r DEA3}
 res %>% 
   filter(baseMean>0 & log2FoldChange > -10 & !is.na(padj)) %>% 
@@ -387,13 +407,19 @@ res %>%
 
 
 ### 3.3 Go Enrichment Analysis
+
+
 ```{r Enrichmnent Analysis}
 
-go_DEGs_up <- enrichGO(gene = DEGs_up, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
+go_DEGs_up <- enrichGO(gene = DEGs_up_genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
 go_DEGs_up_df <- as.data.frame(go_DEGs_up)
+#
+go_DEGs_up_df[1:6,1:5]
 
-go_DEGs_down <- enrichGO(gene = DEGs_down, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
-go_DEGs_downdf <- as.data.frame(go_DEGs_down)
+go_DEGs_down <- enrichGO(gene = DEGs_down_genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
+go_DEGs_down_df <- as.data.frame(go_DEGs_down)
+#
+go_DEGs_down_df[1:6,1:6]
 
 ```
 
@@ -413,6 +439,10 @@ go_DEGs_downdf <- as.data.frame(go_DEGs_down)
 2. Maurya, N.S., Kushwaha, S., Chawade, A. et al. Transcriptome profiling by combined machine learning and statistical R analysis identifies TMEM236 as a potential novel diagnostic biomarker for colorectal cancer. Sci Rep 11, 14304 (2021).
 
 3.Ringnér, M. What is principal component analysis?. Nat Biotechnol 26, 303–304 (2008).
+
+4.Rosati, Diletta et al. “Differential gene expression analysis pipelines and bioinformatic tools for the identification of specific biomarkers: A review.” Computational and structural biotechnology journal vol. 23 1154-1168. 1 Mar. 2024, doi:10.1016/j.csbj.2024.02.018
+
+
 
 
 
