@@ -281,19 +281,6 @@ ggplot(top_features, aes(x = reorder(Feature, Importance), y = Importance)) +
     y = "Importance (Mean Decrease Gini)"
   )
 
-### Somwthing like this???
-cancertable <- cancer.rf.model %>% 
-  importance() %>% 
-  as.data.frame() %>% 
-  rownames_to_column(var = "Genes") %>%
-  arrange(desc(MeanDecreaseAccuracy)) %>% 
-  mutate(Genes = sub("\\..*", "", Genes))%>%
-  left_join(gene_names, by = c("Genes" = "Ensembl.gene.ID")) %>% 
-  na.omit()%>% 
-  select("Genes", "MeanDecreaseAccuracy", "Symbol")
-
-head(cancertable)
-
 ```
 
 The plot visualizes the top 10 most important features in the Random Forest model based on their Mean Decrease Gini values. These features represent the genes that contribute most significantly to reducing impurity in the classification task.
