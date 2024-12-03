@@ -208,7 +208,6 @@ Objective: Use supervised learning algorithms to classify samples as tumor or no
 #### 2.6.1 Class Balance and Feature selection
 #### 2.6.2 Random forest(RF)
 #### 2.6.3 K-nearest neighbour(KNN)
-#### 2.6.4 Artificial neural networks(ANN)
 
 ### 2.7 Evaluation
 Objective: Assess the performance of each model using relevant metrics and validation techniques.
