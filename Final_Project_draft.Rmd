@@ -17,7 +17,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## 1. Introduction
 
-For the BIN315 course project, our group made a decision to investigate a dataset from TCGA-COAD, a Cancer Genome Atlas initiative focusing on colorectal cancer (CRC). Our goal was to apply our knowledge in differential gene expression analysis, machine learning, and enrichment analysis to gain a deeper understanding of this disease. This report presents our efforts and findings that may provide valuable insights.
+Colorectal cancer (CRC) is one of the most lethal cancers, which stresses the importance of new diagnostic approaches. For the BIN315 course project, our group selected the TCGA-COAD dataset which is a part of the Cancer Genome Atlas initiative that focuses on colorectal cancer. This was done to be able to utilize the knowledge gained in this class on differential gene expression analysis, machine learning and enrichment analysis to gain a better insight into this disease. 
+
+The TCGA-COAD dataset contains a large amount of RNA-Seq data which makes it possible to analyze gene expression in primary tumor and solid normal tissues in detail. RNA-Seq technology is very relevant for these studies since it enables the authors to determine which genes are differentially expressed and which pathways are affected during cancer progression, including the Wnt signaling pathway and the extracellular matrix remodeling. The results of these analyses are the presented with the goal of improving classification using Random Forests and K-Nearest, as well as discovering new biomarkers with diagnostic value. 
+
+This paper Here, on presents we employ molecular pipeline an mechanism for integrated of the approach CRC. In this project, we not only aimed to identify differentially expressed genes and stable biomarkers, but also employed machine learning models and performed functional enrichment analysis to provide research analysis. At the same time, this work presents the real-life use of various bioinformatics tools and techniques learned in this course.
 
 ### 1.1 Dataset
 
@@ -81,6 +85,7 @@ Here, we utilize the DESeq2 package, which is widely-used tool for differential 
 #### 2.4.2 Random forest(RF)
 
 #### 2.4.3 K-nearest neighbour(KNN)
+
 Random Forest modelling is well-suited for high-dimensional data, performing effectively with a large number of features without the need for explicit dimensionality reduction. It is robust to overfitting due to its ensemble approach, which combines multiple decision trees to improve generalization and reduce variance. Additionally, Random Forest naturally handles class imbalance by allowing the adjustment of class weights (classwt), ensuring fair representation of minority classes during model training.
 
 #### 2.4.4 Evaluation
@@ -232,7 +237,7 @@ data_vst <- data_vst - min(data_vst)
 
 ### 3.2 PCA
 
-### 3.2.1 PCA Computation
+#### 3.2.1 PCA Computation
 
 The results of the PCA are illustrated in Fig. 3 and Fig. 4, which depict the cumulative variance explained by the principal components and the dataset visualization based on PC1 and PC2, respectively.
 
@@ -301,7 +306,7 @@ print(genes_pc2)
 
 ```
 
-### 3.2.3 Visualization on the First Two Principal Components
+#### 3.2.3 Visualization on the First Two Principal Components
 
 Then, we turn to visualize our samples on PC1 and PC2 space and distinguish the two classes. In this plot, there is a clear distinction between the primary tumor and solid tissue normal samples. The two classes are mostly separated by PC1, with primary tumors showing a more scattered distribution. And there are a few potential outliers in the lower right of the plot.
 
@@ -316,7 +321,7 @@ data.pca$x %>%
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-### 3.2.4 Outlier Detection through PCA
+#### 3.2.4 Outlier Detection through PCA
 
 Therefore, we tried to check the potential outliers found before and remove them, because the number of these outliers was very small, only 8 samples, and these outliers could have a great impact on the subsequent analysis, so we decided to remove them and perform the PCA analysis again to check the results of the before and after PCA.
 
@@ -357,7 +362,7 @@ data.pca$x %>%
 
 ### 3.3 Differential Expression Analysis
 
-### 3.3.1 Calculation and filtering the DEGs
+#### 3.3.1 Calculation and filtering the DEGs
 
 Here, we create a dataset object and specify the experimental conditions (such as "primary tumor" and "solid tissue normal") though the DESeqDataSetFromMatrix function. Then we use the DESeq function to perform differential expression analysis and extract the analysis results.
 
@@ -412,7 +417,7 @@ print(length(DEGs_up_genes))
 print(length(DEGs_down_genes))
 ```
 
-### 3.3.2 Volcano plot
+#### 3.3.2 Volcano plot
 
 Finally, the results can be visualized to easily observe patterns and gain some potential understanding.
 
@@ -482,7 +487,7 @@ weighted_knn <- train(
 cat("Best k value:", weighted_knn$bestTune$k, "\n")
 ```
 
-The k-NN model was trained using weighted class frequencies to address imbalance. The optimal value of k, 11 was determined using 10-fold cross-validation.
+The kNN model was trained using weighted class frequencies to address imbalance. The optimal value of k, 11 was determined using 10-fold cross-validation.
 
 ##### Making Predictions
 
@@ -608,27 +613,46 @@ top_features <- feature_importance[order(-feature_importance$Importance), ][1:10
 print(top_features)
 ```
 
+
 ```{r plot feature importance}
+gene_names <- read.delim("genenames.org.txt", header = TRUE) %>%
+  na.omit()
+
+genetable <- rf_model %>% 
+  importance() %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "Genes") %>%
+  mutate(Genes = sub("\\..*", "", Genes)) %>%
+  left_join(gene_names, by = c("Genes" = "Ensembl.gene.ID")) %>%
+  na.omit() %>%
+  top_n(10, MeanDecreaseAccuracy) %>%
+  arrange(desc(MeanDecreaseAccuracy)) %>%
+  dplyr::select("Genes", "MeanDecreaseAccuracy", "Symbol")
+
 # Plot feature importance
-library(ggplot2)
-ggplot(top_features, aes(x = reorder(Feature, Importance), y = Importance)) +
-  geom_bar(stat = "identity", fill = "skyblue") +
+ggplot(genetable, aes(x = reorder(Symbol, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
   coord_flip() +
+geom_text(aes(label = Genes), size =3, hjust = 1.1) + 
+  theme_bw() + 
   labs(
     title = "Fig.7. Top 10 Most Important Features",
     x = "Feature (Gene)",
-    y = "Importance (Mean Decrease Gini)"
-  )
+    y = "Importance (Mean Decrease Accuracy)"
+  )+
+theme(plot.title = element_text(hjust = 0.5)) 
+  
 ```
 
 The plot visualizes the top 10 most important features in the Random Forest model based on their Mean Decrease Gini values. These features represent the genes that contribute most significantly to reducing impurity in the classification task.
 
 ### 3.5 Biological Relevance
+
 Gene Ontology (GO) enrichment analysis highlighted key biological processes associated with the top genes that distinguished tumor and normal samples. From the differential expression analysis, we identified significantly up-regulated and down-regulated genes, as well as significant genes identified by random forest models. GO enrichment analysis allowed us to link these genes to relevant biological processes.
 
-### 3.5.1 GO Analysis of Up/Downregulated Genes
-The results shows that the genes upregulated were enriched for gene ontology categories related to immunity and muscle activity, whereas the downregulated genes showed enrichment for gene ontology categories implicated in extracellular matrix remodeling and Wnt signaling pathway.
+#### 3.5.1 GO Analysis of Up/Downregulated Genes
 
+The results shows that the genes upregulated were enriched for gene ontology categories related to immunity and muscle activity, whereas the downregulated genes showed enrichment for gene ontology categories implicated in extracellular matrix organization and Wnt signaling pathway.
 ```{r Go Analysis1}
 
 go_DEGs_up <- enrichGO(gene = DEGs_up_genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP")
@@ -636,7 +660,7 @@ go_DEGs_up_df <- as.data.frame(go_DEGs_up)
 
 go_DEGs_up_df[1:10,2:7]
 
-go_DEGs_down <- enrichGO(gene = DEGs_down_genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.1)
+go_DEGs_down <- enrichGO(gene = DEGs_down_genes, OrgDb = org.Hs.eg.db, keyType = "ENSEMBL", ont = "BP", pvalueCutoff = 0.05)
 go_DEGs_down_df <- as.data.frame(go_DEGs_down)
 
 go_DEGs_down_df[1:10,2:7]
@@ -645,7 +669,7 @@ go_DEGs_down_df[1:10,2:7]
 
 #### 3.5.2 GO Analysis of genes seleted from rf model
 
-These findings align with known cancer biology, emphasizing processes involved in cell growth, signaling, and regulation.
+The result identified these significant biological processes associated with the top genes separating tumor and normal samples. These findings align with known cancer biology, emphasizing processes involved in cell growth, signaling, and regulation.
 
 ```{r Go Analysis2}
 selectted_gene <- rf_model %>% 
@@ -667,7 +691,13 @@ print(go_selectted_gene_df[1:10,2:7])
 
 ## 4. Discussion
 
+### 4.1 Conclusion
 
+This paper completes a series of analysis pipelines, starting from raw data, preprocessing, filtering genes, removing outliers identified by PCA, differentially expressed genes, creating classification models using machine learning methods, and GO enrichment analysis. Our supervised model performed very well, with no signs of overfitting or data leakage. From the interpretation of GO enrichment analysis of gene sets based on differential expression analysis and RF model, we obtained common biological insights, that is, the results involve key pathways and processes in tumor biology, such as cell signaling (especially Wnt pathway), extracellular matrix organization, which play an important role in tumorigenesis.
+
+### 4.2 Further study
+
+Future research directions can explore other data preprocessing methods, such as correlation analysis, and LASSO filtering to further reduce the dimension before building the model. At the same time, advanced machine learning methods such as deep learning can also be used to process high-dimensional, low-sample biological data sets. For differentially expressed genes and genes screened from the RF model, we can find common genes from both methods to narrow the range of genes of interest. In terms of research depth, we now use GO enrichment analysis to gain insight into the functional groups of important genes, and then pathway maps can be used to help determine how these genes affect biological systems. In addition, experimental validation of selected genes and integration of multi-omics data will help to gain a deeper understanding of biological mechanisms and seek practical applications of these findings.
 
 ## References
 
@@ -675,6 +705,6 @@ print(go_selectted_gene_df[1:10,2:7])
 
 2.  Maurya, N.S., Kushwaha, S., Chawade, A. et al. Transcriptome profiling by combined machine learning and statistical R analysis identifies TMEM236 as a potential novel diagnostic biomarker for colorectal cancer. Sci Rep 11, 14304 (2021).
 
-3.Ringnér, M. What is principal component analysis?. Nat Biotechnol 26, 303–304 (2008).
+3.  Ringnér, M. What is principal component analysis?. Nat Biotechnol 26, 303–304 (2008).
 
-4.Rosati, Diletta et al. “Differential gene expression analysis pipelines and bioinformatic tools for the identification of specific biomarkers: A review.” Computational and structural biotechnology journal vol. 23 1154-1168. 1 Mar. 2024, <doi:10.1016/j.csbj.2024.02.018>
+4.  Rosati, Diletta et al. “Differential gene expression analysis pipelines and bioinformatic tools for the identification of specific biomarkers: A review.” Computational and structural biotechnology journal vol. 23 1154-1168. 1 Mar. 2024.
